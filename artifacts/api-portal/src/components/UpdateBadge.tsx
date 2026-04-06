@@ -16,15 +16,12 @@ interface Props {
   apiKey: string;
 }
 
-type UpdateState = "idle" | "applying" | "done" | "error";
-
-export default function UpdateBadge({ baseUrl, apiKey }: Props) {
+export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [open, setOpen] = useState(false);
-  const [updateState, setUpdateState] = useState<UpdateState>("idle");
-  const [updateMsg, setUpdateMsg] = useState("");
   const [checking, setChecking] = useState(false);
   const [checkDone, setCheckDone] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fetchVersion = useCallback(async () => {
     try {
@@ -51,31 +48,26 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
     return () => clearInterval(t);
   }, [fetchVersion]);
 
-  const applyUpdate = async () => {
-    if (!apiKey) {
-      setUpdateMsg("请先在首页填写 API Key 后再执行更新");
-      setUpdateState("error");
-      return;
-    }
-    setUpdateState("applying");
-    setUpdateMsg("正在从 GitHub 拉取最新代码，服务器即将自动重启（约 30-60 秒）…");
+  const buildAgentPrompt = (latestVer: string) =>
+    `请帮我把 AI 网关更新到最新版本 ${latestVer}。\n` +
+    `从 GitHub 仓库 https://github.com/Akatsuki03/Replit2Api 拉取最新代码，覆盖当前项目文件（无需保留原文件），` +
+    `然后运行 pnpm install，最后重启 "artifacts/api-server: API Server" 工作流。`;
+
+  const copyPrompt = async () => {
+    if (!info?.latestVersion) return;
     try {
-      const r = await fetch(`${baseUrl}/api/update/apply`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
-      const d = await r.json();
-      if (!r.ok) {
-        setUpdateState("error");
-        setUpdateMsg(d.error ?? "更新失败，请稍后重试");
-      } else {
-        setUpdateState("done");
-        setUpdateMsg("更新已启动 — 服务器正在重新编译并重启，约 30 秒后自动刷新页面…");
-        setTimeout(() => window.location.reload(), 35000);
-      }
+      await navigator.clipboard.writeText(buildAgentPrompt(info.latestVersion));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     } catch {
-      setUpdateState("error");
-      setUpdateMsg("网络错误，请重试");
+      const el = document.createElement("textarea");
+      el.value = buildAgentPrompt(info.latestVersion);
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     }
   };
 
@@ -85,7 +77,6 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
 
   return (
     <>
-      {/* 版本徽标 */}
       <button
         onClick={() => setOpen(true)}
         style={{
@@ -107,10 +98,9 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
         {hasUpdate && <span style={{ fontSize: "10px" }}>↑ {info.latestVersion}</span>}
       </button>
 
-      {/* 详情弹窗 */}
       {open && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setOpen(false); setCopied(false); } }}
           style={{
             position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
             zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center",
@@ -119,10 +109,9 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
         >
           <div style={{
             background: "hsl(222,47%,12%)", border: "1px solid rgba(99,102,241,0.25)",
-            borderRadius: "16px", width: "100%", maxWidth: "480px",
+            borderRadius: "16px", width: "100%", maxWidth: "500px",
             padding: "24px", boxShadow: "0 32px 80px rgba(0,0,0,0.7)",
           }}>
-            {/* 标题 */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "#f1f5f9", fontSize: "15px" }}>AI 网关 版本信息</div>
@@ -131,12 +120,11 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
                 </div>
               </div>
               <button
-                onClick={() => { setOpen(false); setUpdateState("idle"); setUpdateMsg(""); }}
+                onClick={() => { setOpen(false); setCopied(false); }}
                 style={{ background: "none", border: "none", color: "#334155", fontSize: "22px", cursor: "pointer" }}
               >×</button>
             </div>
 
-            {/* 当前版本说明 */}
             {info.releaseNotes && (
               <div style={{
                 background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.18)",
@@ -147,7 +135,6 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
               </div>
             )}
 
-            {/* 检测失败提示 */}
             {info.checkError && !hasUpdate && (
               <div style={{
                 background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)",
@@ -158,7 +145,6 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
               </div>
             )}
 
-            {/* 无更新提示 */}
             {!hasUpdate && !info.checkError && (
               <div style={{
                 background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.15)",
@@ -169,94 +155,76 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
               </div>
             )}
 
-            {/* 新版本信息 */}
             {hasUpdate && (
-              <div style={{
-                background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
-                borderRadius: "10px", padding: "14px", marginBottom: "16px",
-              }}>
-                <div style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
-                  发现新版本 v{info.latestVersion}
-                  {info.latestReleaseDate && (
-                    <span style={{ fontWeight: 400, color: "#92400e", marginLeft: "8px" }}>{info.latestReleaseDate}</span>
+              <>
+                <div style={{
+                  background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
+                  borderRadius: "10px", padding: "14px", marginBottom: "14px",
+                }}>
+                  <div style={{ color: "#fbbf24", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
+                    发现新版本 v{info.latestVersion}
+                    {info.latestReleaseDate && (
+                      <span style={{ fontWeight: 400, color: "#92400e", marginLeft: "8px" }}>{info.latestReleaseDate}</span>
+                    )}
+                  </div>
+                  {info.latestReleaseNotes && (
+                    <div style={{ color: "#94a3b8", fontSize: "12.5px", lineHeight: "1.6" }}>
+                      {info.latestReleaseNotes}
+                    </div>
                   )}
                 </div>
-                {info.latestReleaseNotes && (
-                  <div style={{ color: "#94a3b8", fontSize: "12.5px", lineHeight: "1.6" }}>
-                    {info.latestReleaseNotes}
+
+                <div style={{
+                  background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.18)",
+                  borderRadius: "10px", padding: "14px", marginBottom: "14px",
+                }}>
+                  <div style={{ color: "#818cf8", fontSize: "11px", fontWeight: 700, marginBottom: "10px" }}>
+                    📋 更新方式 — 复制提示词 → 粘贴到 Replit AI 对话框
                   </div>
-                )}
-              </div>
+                  <pre style={{
+                    margin: 0, padding: "10px 12px",
+                    background: "rgba(0,0,0,0.35)", borderRadius: "8px",
+                    fontSize: "11.5px", color: "#cbd5e1", lineHeight: "1.6",
+                    whiteSpace: "pre-wrap", wordBreak: "break-word",
+                    fontFamily: "Menlo, Monaco, monospace",
+                    maxHeight: "120px", overflowY: "auto",
+                  }}>
+                    {buildAgentPrompt(info.latestVersion ?? "")}
+                  </pre>
+                  <button
+                    onClick={copyPrompt}
+                    style={{
+                      marginTop: "10px", width: "100%",
+                      padding: "9px 0", borderRadius: "8px",
+                      border: copied ? "1px solid rgba(74,222,128,0.4)" : "1px solid rgba(99,102,241,0.4)",
+                      background: copied ? "rgba(74,222,128,0.1)" : "rgba(99,102,241,0.15)",
+                      color: copied ? "#4ade80" : "#a5b4fc",
+                      fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s",
+                    }}
+                  >
+                    {copied ? "✓ 已复制到剪贴板！" : "复制提示词"}
+                  </button>
+                </div>
+              </>
             )}
 
-            {/* 更新操作状态消息 */}
-            {updateState !== "idle" && (
-              <div style={{
-                background: updateState === "error" ? "rgba(239,68,68,0.08)" : "rgba(74,222,128,0.06)",
-                border: `1px solid ${updateState === "error" ? "rgba(239,68,68,0.2)" : "rgba(74,222,128,0.15)"}`,
-                borderRadius: "10px", padding: "12px 14px", marginBottom: "14px",
-                color: updateState === "error" ? "#f87171" : "#86efac",
-                fontSize: "13px", lineHeight: "1.6",
-              }}>
-                {updateState === "applying" && (
-                  <span style={{ marginRight: "8px", animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
-                )}
-                {updateMsg}
-              </div>
-            )}
-
-            {/* 底部按钮 */}
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
-              {/* 重新检测 — 始终可见，有 loading 反馈 */}
               <button
                 onClick={manualCheck}
-                disabled={checking || updateState === "applying"}
+                disabled={checking}
                 style={{
                   padding: "8px 16px", borderRadius: "8px",
                   border: `1px solid ${checkDone ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
                   background: checkDone ? "rgba(74,222,128,0.08)" : "rgba(255,255,255,0.04)",
                   color: checkDone ? "#4ade80" : checking ? "#334155" : "#475569",
-                  fontSize: "13px", cursor: (checking || updateState === "applying") ? "not-allowed" : "pointer",
+                  fontSize: "13px", cursor: checking ? "not-allowed" : "pointer",
                   display: "flex", alignItems: "center", gap: "6px",
-                  opacity: updateState === "applying" ? 0.5 : 1,
                   transition: "all 0.2s",
                 }}
               >
                 {checking && <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>}
                 {checking ? "检测中…" : checkDone ? "✓ 检测完成" : "重新检测"}
               </button>
-
-              {/* 立即更新 — 仅有新版本时显示 */}
-              {hasUpdate && (
-                <button
-                  onClick={applyUpdate}
-                  disabled={updateState === "applying" || updateState === "done"}
-                  style={{
-                    padding: "8px 18px", borderRadius: "8px",
-                    border: "1px solid rgba(251,191,36,0.4)",
-                    background: updateState === "applying" ? "rgba(251,191,36,0.05)" : "rgba(251,191,36,0.12)",
-                    color: "#fbbf24", fontSize: "13px", fontWeight: 600,
-                    cursor: (updateState === "applying" || updateState === "done") ? "not-allowed" : "pointer",
-                    opacity: (updateState === "applying" || updateState === "done") ? 0.6 : 1,
-                  }}
-                >
-                  {updateState === "applying" ? "更新中…" : updateState === "done" ? "已完成 ✓" : "立即更新"}
-                </button>
-              )}
-
-              {/* 重试 — 仅在更新失败时显示 */}
-              {updateState === "error" && (
-                <button
-                  onClick={() => { setUpdateState("idle"); setUpdateMsg(""); }}
-                  style={{
-                    padding: "8px 14px", borderRadius: "8px",
-                    border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)",
-                    color: "#f87171", fontSize: "13px", cursor: "pointer",
-                  }}
-                >
-                  重置
-                </button>
-              )}
             </div>
           </div>
         </div>

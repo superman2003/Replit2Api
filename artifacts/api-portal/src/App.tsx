@@ -258,6 +258,15 @@ function PageHome({
         {(() => {
           const releases = [
             {
+              version: "v1.0.9",
+              date: "2026-04-06",
+              items: [
+                { zh: "更新方式改为「复制提示词给 Replit Agent」：点击版本徽标→「复制提示词」→粘贴到 Replit AI 对话框，由 Agent 自动拉取最新代码并重启", en: "Update flow changed to 'Copy prompt for Replit Agent': click version badge → copy prompt → paste in Replit AI chat; Agent handles pull + restart" },
+                { zh: "修复用量统计「刷新」按钮被上方元素遮挡无法点击的问题（去除 marginTop: -16px）", en: "Fix: stats refresh button was overlapped and unclickable due to negative margin; now properly positioned" },
+                { zh: "统计加载失败时区分错误类型：服务器未配置 PROXY_API_KEY（500）vs API Key 不正确（401），显示针对性提示", en: "Stats error messages now differentiate: 'PROXY_API_KEY not configured' (500) vs 'API Key mismatch' (401)" },
+              ],
+            },
+            {
               version: "v1.0.8",
               date: "2026-04-06",
               items: [
@@ -477,7 +486,7 @@ function PageStats({
   baseUrl: string;
   apiKey: string;
   stats: Record<string, BackendStat> | null;
-  statsError: boolean;
+  statsError: false | "auth" | "server";
   onRefresh: () => void;
   addUrl: string;
   setAddUrl: (u: string) => void;
@@ -516,14 +525,16 @@ function PageStats({
           <button onClick={onRefresh} style={{
             background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: "6px", padding: "4px 10px", color: "#64748b", fontSize: "12px",
-            cursor: "pointer", marginTop: "-16px",
+            cursor: "pointer",
           }}>刷新</button>
         </div>
 
         {!apiKey ? (
           <p style={{ margin: 0, fontSize: "13px", color: "#475569" }}>请先在首页填入 API Key 后查看统计。</p>
-        ) : statsError ? (
-          <p style={{ margin: 0, fontSize: "13px", color: "#f87171" }}>统计加载失败，请检查 API Key 是否正确。</p>
+        ) : statsError === "server" ? (
+          <p style={{ margin: 0, fontSize: "13px", color: "#f87171" }}>服务器未配置 PROXY_API_KEY — 请运行配置助手完成初始化。</p>
+        ) : statsError === "auth" ? (
+          <p style={{ margin: 0, fontSize: "13px", color: "#f87171" }}>认证失败，请检查首页填入的 API Key 是否与服务器一致。</p>
         ) : !stats ? (
           <p style={{ margin: 0, fontSize: "13px", color: "#475569" }}>加载中...</p>
         ) : (
@@ -1551,7 +1562,7 @@ export default function App() {
     openai: false, anthropic: false, gemini: false, openrouter: false,
   });
   const [stats, setStats] = useState<Record<string, { calls: number; errors: number; promptTokens: number; completionTokens: number; totalTokens: number; avgDurationMs: number; avgTtftMs: number | null; health: string; url?: string; dynamic?: boolean; enabled?: boolean }> | null>(null);
-  const [statsError, setStatsError] = useState(false);
+  const [statsError, setStatsError] = useState<false | "auth" | "server">(false);
   const [addUrl, setAddUrl] = useState("");
   const [addState, setAddState] = useState<"idle" | "loading" | "ok" | "err">("idle");
   const [addMsg, setAddMsg] = useState("");
@@ -1597,10 +1608,13 @@ export default function App() {
     if (!key) { setStats(null); setStatsError(false); return; }
     try {
       const r = await fetch(`${baseUrl}/v1/stats`, { headers: { Authorization: `Bearer ${key}` } });
-      if (!r.ok) { setStatsError(true); return; }
+      if (!r.ok) {
+        setStatsError(r.status === 500 ? "server" : "auth");
+        return;
+      }
       const d = await r.json();
       setStats(d.stats); setStatsError(false);
-    } catch { setStatsError(true); }
+    } catch { setStatsError("auth"); }
   }, [baseUrl]);
 
   const addBackend = async (e: React.FormEvent) => {
