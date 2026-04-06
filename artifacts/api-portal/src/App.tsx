@@ -257,6 +257,17 @@ function PageHome({
         </div>
         {[
           {
+            version: "v1.0.5",
+            date: "2026-04-06",
+            items: [
+              { zh: "配置助手重写：单步模式，一条指令完成所有初始化（Secret + AI Integrations + 重启），明确禁止 Agent 索取第三方 API Key", en: "SetupWizard rewrite: single-step prompt covers all init (Secret + AI Integrations + restart); forbids Agent from asking for third-party API keys" },
+              { zh: "版本比较修复：正确处理预发布后缀（a/b/rc1 等），stable > 同号 pre-release", en: "Version comparison fix: correctly handles pre-release suffixes (a/b/rc1…); stable > same-number pre-release" },
+              { zh: "子节点 URL 自动补全 /api 后缀（服务端路由层 + 前端统计页）", en: "Sub-node URL auto-normalization: auto-appends /api suffix in server routing and frontend Stats page" },
+              { zh: "X-Proxy-Version header 修复：过滤非 ASCII 字符，彻底解决 ERR_INVALID_CHAR 崩溃", en: "X-Proxy-Version header fix: strip non-ASCII chars, eliminating ERR_INVALID_CHAR crash" },
+              { zh: "后端批量管理：多选批量启用 / 禁用 / 删除", en: "Batch backend management: multi-select for bulk enable / disable / remove" },
+            ],
+          },
+          {
             version: "v1.0.1",
             date: "2026-04-06",
             items: [
