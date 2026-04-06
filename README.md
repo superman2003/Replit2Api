@@ -6,7 +6,7 @@
 >
 > 一个 Replit 项目，统一接入主流 AI 服务商，提供 OpenAI 兼容接口。
 
-[![Version](https://img.shields.io/badge/version-1.0.5-6366f1?style=flat-square)](./version.json)
+[![Version](https://img.shields.io/badge/version-1.1.0-6366f1?style=flat-square)](./version.json)
 [![Replit](https://img.shields.io/badge/Replit-Remix%20now-f26207?style=flat-square&logo=replit)](https://replit.com/@Akatsukis036s/Replit-Api-Public)
 [![License](https://img.shields.io/badge/license-MIT-10b981?style=flat-square)](./LICENSE)
 
@@ -249,11 +249,20 @@ Manage multiple Replit2Api instances from the **Stats & Nodes** tab:
 
 ## 自动更新 · Auto Update
 
-Replit2Api 内置热更新机制，无需 GitHub：
-Replit2Api has a built-in hot-update system, no GitHub required:
+**门户更新（当前实例）**
+
+点击门户右上角版本徽标 → **复制提示词** → 粘贴到 Replit Agent 对话框，Agent 将自动从 GitHub 拉取最新代码并重启服务器。
+
+**To update this instance:** Click the version badge in the portal → **Copy prompt** → Paste into Replit Agent chat. The Agent will pull the latest code from GitHub and restart automatically.
+
+---
+
+**子节点批量更新（Fleet Manager）**
+
+在管理面板 **统计 & 节点** 页的 Fleet Manager 中填入子节点地址，点击「全部更新」可向所有子节点推送最新文件包：
 
 ```
-上游实例 (Upstream)              子节点 (Sub-node)
+本实例 (This instance)          子节点 (Sub-node)
       │                               │
       ├── GET /api/update/version ────→ 版本号比对
       │                               │
@@ -262,30 +271,87 @@ Replit2Api has a built-in hot-update system, no GitHub required:
                                        自动重启
 ```
 
-在 Fleet Manager 中填入上游实例地址（即本项目的生产 URL）后，子节点可一键同步最新版本。
-Add the upstream instance URL in Fleet Manager, and sub-nodes can sync the latest version in one click.
+**To update sub-nodes:** Add sub-node URLs in Fleet Manager, then click "Update All" to push the latest bundle to all nodes at once.
 
 ---
 
 ## 更新日志 · Changelog
 
-### v1.0.5 — 2026-04-06
+### v1.1.0 — 2026-04-06
 
-- **配置助手重写**：向导改为单步模式，一条完整指令覆盖所有初始化步骤（添加 PROXY_API_KEY Secret + 添加 AI Integrations + 重启），明确禁止 Agent 索取第三方 API Key
-- **版本比较修复**：`parseVersion()` + `isNewer()` 正确处理预发布后缀（a/b/rc1 等），stable > 同号 pre-release，同后缀按字母序比较
-- **子节点 URL 自动规范化**：服务端 `getFriendProxyConfigs` 和前端 `PageStats` 均自动补全 `/api` 后缀
-- **X-Proxy-Version header 修复**：`safeVersionHeader()` 过滤非 ASCII 字符，根除 Node.js `ERR_INVALID_CHAR` 崩溃；版本号命名改为纯 ASCII（1.0.5 而非含希腊字母）
-- **后端批量管理**：支持多选后端，批量启用 / 禁用 / 删除
-- **文档精简**：快速开始仅保留 Remix 入口，移除手动部署章节
+- **项目正式更名为 Replit2Api**（UI、标题、提示词全部同步更新）
+- **子节点自动重试**：请求失败后自动换节点重试，最多 3 次，精确区分 5xx 与网络错误；客户端无感知
+- **流式 SSE 头延迟提交**：首个数据包到达后才锁定连接，保留重试窗口
+- **Token 用量 fallback 估算**：子节点不返回 usage 时按字符数自动估算，统计页不再显示 0
+- **ENV 节点提示词**：统计页「添加节点」新增「复制提示词」按钮，一键发给 Replit Agent 配置永久 ENV 子节点
+
+- **Project renamed to Replit2Api** — UI, title, and prompts all updated
+- **Friend proxy auto-retry**: up to 3 attempts, distinguishes 5xx from network errors; client sees clean response
+- **Streaming SSE header delay**: headers committed only after first chunk, preserving retry window
+- **Token fallback estimation**: estimates from char count when sub-node omits usage field
+- **ENV node prompt**: "Copy prompt" button in Add Node section to configure permanent ENV sub-nodes via Replit Agent
 
 ---
 
-- **SetupWizard rewrite**: Single-step mode — one unified prompt covers all init steps (add PROXY_API_KEY secret + add AI Integrations + restart); explicitly forbids Agent from asking for third-party API keys
-- **Version comparison fix**: `parseVersion()` + `isNewer()` correctly handle pre-release suffixes (a/b/rc1…); stable > same-number pre-release; lexicographic pre-release ordering
-- **Sub-node URL auto-normalization**: Server `getFriendProxyConfigs` and frontend `PageStats` both auto-append `/api` suffix
-- **X-Proxy-Version header fix**: `safeVersionHeader()` strips non-ASCII chars, eliminating Node.js `ERR_INVALID_CHAR` crash; version strings now ASCII-only
-- **Batch backend management**: Multi-select backends for bulk enable / disable / remove
-- **Docs simplified**: Quick Start is Remix-only; manual deploy section removed
+### v1.0.9 — 2026-04-06
+
+- **配置助手弹窗逻辑修复**：查询服务器状态，仅在 PROXY_API_KEY 未配置时自动弹出；配置完成后不再重复弹出
+- **更新方式改为 Agent 提示词**：点击版本徽标→复制提示词→粘贴到 Replit Agent，由 Agent 自动拉取最新代码并重启
+- **统计刷新按钮修复**：去除 `marginTop: -16px`，不再被遮挡
+- **统计错误提示细化**：区分 500（PROXY_API_KEY 未配置）与 401（API Key 不匹配）
+
+- **Setup wizard logic fix**: queries server status; auto-pops only when PROXY_API_KEY is not yet configured
+- **Update flow changed to Agent prompt**: click version badge → copy prompt → paste in Replit Agent chat
+- **Stats refresh button fix**: removed negative margin that caused overlap
+- **Stats error differentiation**: 500 = key not configured; 401 = key mismatch
+
+---
+
+### v1.0.8 — 2026-04-06
+
+- **批量节点管理**：全选/多选现在覆盖所有子节点（含 ENV 节点），批量启用/禁用/移除
+- **更新日志可滚动**：默认展示最新 2 条，历史记录可滚动查看
+- **配置助手第 3 步**：开通 App Storage（GCS），子节点配置 Publish 后不再丢失
+
+- **Batch node management**: select-all now covers all sub-nodes including ENV nodes; bulk enable/disable/remove
+- **Changelog scrollable**: 2 latest entries shown by default; scroll to view history
+- **Setup wizard step 3**: provision App Storage so sub-node configs survive redeploys
+
+---
+
+### v1.0.7 — 2026-04-06
+
+- **云端持久化修复**：动态子节点和禁用模型数据改用 Replit GCS 存储，重新部署不再清空
+- **「重新检测」按钮修复**：错误状态下也可点击，点击后显示加载动画和完成提示
+
+- **Cloud persistence fix**: dynamic backends and disabled models now use Replit GCS; survive redeploys
+- **Re-check button fix**: always clickable even after error; shows spinner and completion feedback
+
+---
+
+### v1.0.6 — 2026-04-06
+
+- **模型禁用管理**：支持从管理面板禁用/启用单个模型，禁用后该模型不出现在 `/v1/models` 列表中
+- **统计页包含全部节点**：`/v1/stats` 现在返回所有后端（含禁用节点），禁用节点以红色边框标注
+
+- **Model disable management**: enable/disable individual models from admin panel; disabled models excluded from `/v1/models`
+- **Stats includes all backends**: `/v1/stats` now returns all nodes including disabled ones; shown with red border
+
+---
+
+### v1.0.5 — 2026-04-06
+
+- **配置助手重写**：单步模式，一条指令覆盖全部初始化步骤，明确禁止 Agent 索取第三方 API Key
+- **版本比较修复**：正确处理预发布后缀（a/b/rc1 等）
+- **子节点 URL 自动规范化**：服务端与前端均自动补全 `/api` 后缀
+- **X-Proxy-Version header 修复**：过滤非 ASCII 字符，根除 `ERR_INVALID_CHAR` 崩溃
+- **后端批量管理**：多选后端，批量启用/禁用/删除
+
+- **SetupWizard rewrite**: single-step unified prompt; forbids Agent from asking for third-party API keys
+- **Version comparison fix**: correctly handles pre-release suffixes
+- **Sub-node URL normalization**: auto-appends `/api` suffix server-side and frontend
+- **X-Proxy-Version header fix**: strips non-ASCII chars, eliminates `ERR_INVALID_CHAR` crash
+- **Batch backend management**: multi-select for bulk enable/disable/remove
 
 ---
 
@@ -297,9 +363,11 @@ Add the upstream instance URL in Fleet Manager, and sub-nodes can sync the lates
 - 新增 Fleet Manager — 子节点批量版本检测与一键更新
 
 - Full tool calling support — auto-conversion for Claude (tool_use) and Gemini (functionDeclarations)
-- Claude streaming tool calls with correct tool_calls finish_reason
+- Claude streaming tool calls with correct `tool_calls` finish_reason
 - Frontend redesigned into 3-tab layout: Home / Stats & Nodes / API Docs
 - New Fleet Manager — batch version check and one-click update for sub-nodes
+
+---
 
 ### v1.0.0 — 2026-04-06
 
