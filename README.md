@@ -6,7 +6,7 @@
 >
 > 一个 Replit 项目，统一接入主流 AI 服务商，提供 OpenAI 兼容接口。
 
-[![Version](https://img.shields.io/badge/version-1.0.4c-6366f1?style=flat-square)](./version.json)
+[![Version](https://img.shields.io/badge/version-1.0.5-6366f1?style=flat-square)](./version.json)
 [![Replit](https://img.shields.io/badge/Replit-Remix%20now-f26207?style=flat-square&logo=replit)](https://replit.com/@Akatsukis036s/Replit-Api-Public)
 [![License](https://img.shields.io/badge/license-MIT-10b981?style=flat-square)](./LICENSE)
 
@@ -268,6 +268,26 @@ Add the upstream instance URL in Fleet Manager, and sub-nodes can sync the lates
 ---
 
 ## 更新日志 · Changelog
+
+### v1.0.5 — 2026-04-06
+
+- **配置助手重写**：向导改为单步模式，一条完整指令覆盖所有初始化步骤（添加 PROXY_API_KEY Secret + 添加 AI Integrations + 重启），明确禁止 Agent 索取第三方 API Key
+- **版本比较修复**：`parseVersion()` + `isNewer()` 正确处理预发布后缀（a/b/rc1 等），stable > 同号 pre-release，同后缀按字母序比较
+- **子节点 URL 自动规范化**：服务端 `getFriendProxyConfigs` 和前端 `PageStats` 均自动补全 `/api` 后缀
+- **X-Proxy-Version header 修复**：`safeVersionHeader()` 过滤非 ASCII 字符，根除 Node.js `ERR_INVALID_CHAR` 崩溃；版本号命名改为纯 ASCII（1.0.5 而非含希腊字母）
+- **后端批量管理**：支持多选后端，批量启用 / 禁用 / 删除
+- **文档精简**：快速开始仅保留 Remix 入口，移除手动部署章节
+
+---
+
+- **SetupWizard rewrite**: Single-step mode — one unified prompt covers all init steps (add PROXY_API_KEY secret + add AI Integrations + restart); explicitly forbids Agent from asking for third-party API keys
+- **Version comparison fix**: `parseVersion()` + `isNewer()` correctly handle pre-release suffixes (a/b/rc1…); stable > same-number pre-release; lexicographic pre-release ordering
+- **Sub-node URL auto-normalization**: Server `getFriendProxyConfigs` and frontend `PageStats` both auto-append `/api` suffix
+- **X-Proxy-Version header fix**: `safeVersionHeader()` strips non-ASCII chars, eliminating Node.js `ERR_INVALID_CHAR` crash; version strings now ASCII-only
+- **Batch backend management**: Multi-select backends for bulk enable / disable / remove
+- **Docs simplified**: Quick Start is Remix-only; manual deploy section removed
+
+---
 
 ### v1.0.1 — 2026-04-06
 
