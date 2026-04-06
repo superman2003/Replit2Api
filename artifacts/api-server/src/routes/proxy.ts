@@ -81,7 +81,7 @@ const HEALTH_TIMEOUT_MS = 5_000; // 5s timeout per check
 
 const DYNAMIC_FILE = resolve(process.cwd(), "dynamic_backends.json");
 
-interface DynamicBackend { label: string; url: string }
+interface DynamicBackend { label: string; url: string; enabled?: boolean }
 
 function loadDynamicBackends(): DynamicBackend[] {
   try {
@@ -107,10 +107,10 @@ function getFriendProxyConfigs(): { label: string; url: string; apiKey: string }
     if (url) configs.push({ label: key.replace("FRIEND_PROXY_URL", "FRIEND"), url, apiKey });
   }
 
-  // Merge dynamic backends (added via API), skip duplicates
+  // Merge dynamic backends (added via API), skip duplicates and disabled ones
   const knownUrls = new Set(configs.map((c) => c.url));
   for (const d of dynamicBackends) {
-    if (!knownUrls.has(d.url)) configs.push({ label: d.label, url: d.url, apiKey });
+    if (!knownUrls.has(d.url) && d.enabled !== false) configs.push({ label: d.label, url: d.url, apiKey });
   }
 
   return configs;
@@ -624,6 +624,7 @@ router.get("/v1/stats", requireApiKey, (_req: Request, res: Response) => {
       health: label === "local" ? "healthy" : getCachedHealth(cfg?.url ?? "") === false ? "down" : "healthy",
       url: label === "local" ? null : cfg?.url ?? null,
       dynamic: dynamicBackends.some((d) => d.label === label),
+      enabled: (() => { const d = dynamicBackends.find((x) => x.label === label); return d ? d.enabled !== false : true; })(),
     };
   }
   res.json({ stats: result, uptimeSeconds: Math.round(process.uptime()) });
@@ -674,6 +675,34 @@ router.delete("/v1/admin/backends/:label", requireApiKey, (req: Request, res: Re
   if (dynamicBackends.length === before) { res.status(404).json({ error: "Dynamic backend not found" }); return; }
   saveDynamicBackends(dynamicBackends);
   res.json({ deleted: true, label });
+});
+
+// PATCH /v1/admin/backends/:label — 切换单个节点启用/禁用
+router.patch("/v1/admin/backends/:label", requireApiKey, (req: Request, res: Response) => {
+  const { label } = req.params;
+  const { enabled } = req.body as { enabled?: boolean };
+  if (typeof enabled !== "boolean") { res.status(400).json({ error: "enabled (boolean) required" }); return; }
+  const target = dynamicBackends.find((d) => d.label === label);
+  if (!target) { res.status(404).json({ error: "Dynamic backend not found" }); return; }
+  target.enabled = enabled;
+  saveDynamicBackends(dynamicBackends);
+  res.json({ label, enabled });
+});
+
+// PATCH /v1/admin/backends — 批量切换（labels 数组 + enabled 布尔值）
+router.patch("/v1/admin/backends", requireApiKey, (req: Request, res: Response) => {
+  const { labels, enabled } = req.body as { labels?: string[]; enabled?: boolean };
+  if (!Array.isArray(labels) || typeof enabled !== "boolean") {
+    res.status(400).json({ error: "labels (string[]) and enabled (boolean) required" });
+    return;
+  }
+  const set = new Set(labels);
+  let updated = 0;
+  for (const d of dynamicBackends) {
+    if (set.has(d.label)) { d.enabled = enabled; updated++; }
+  }
+  saveDynamicBackends(dynamicBackends);
+  res.json({ updated, enabled });
 });
 
 // ---------------------------------------------------------------------------

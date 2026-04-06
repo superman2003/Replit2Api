@@ -157,11 +157,10 @@ export default function SetupWizard({ baseUrl, onComplete, onDismiss }: Props) {
 
     if (status.configured && status.integrationsReady) {
       addAgent(
-        "配置成功！服务器已读取到访问密码，AI 集成也已就绪。\n\n接下来可以选择是否启用自动更新——当上游发布新版本时，你可以一键从门户页面更新。",
+        "配置成功！服务器已读取到访问密码，AI 集成也已就绪。\n\n自动更新已内置，无需任何额外配置——页面顶部会自动检测新版本并提示你一键升级。",
         {
           actions: [
-            { label: "启用自动更新（推荐）", value: "enable_update", primary: true },
-            { label: "跳过，直接使用", value: "finish" },
+            { label: "完成，开始使用 🚀", value: "finish", primary: true },
           ],
         },
         300
@@ -248,39 +247,6 @@ export default function SetupWizard({ baseUrl, onComplete, onDismiss }: Props) {
             copyBlocks: [{ text: "请帮我重启项目" }],
             actions: [
               { label: "Agent 已重启 ✓，检测一下", value: "check", primary: true },
-            ],
-          }
-        );
-        return;
-      }
-
-      if (value === "enable_update") {
-        addUser(label);
-        addAgent(
-          "好的！请复制下方指令发给 Replit Agent，它会帮你安全保存更新检测地址：",
-          {
-            copyBlocks: [
-              {
-                text: "请帮我设置 UPDATE_CHECK_URL Secret，值为 https://replit-api-public-Akatsukis036s.replit.app/api/update/version",
-              },
-            ],
-            actions: [
-              { label: "Agent 已设置完成 ✓，继续", value: "update_set_done", primary: true },
-              { label: "跳过，直接使用", value: "finish" },
-            ],
-          }
-        );
-        return;
-      }
-
-      if (value === "update_set_done") {
-        addUser(label);
-        addAgent(
-          "自动更新已启用！之后门户页面右上角的版本徽标会提示你有新版本，点击「立即更新」即可一键升级，无需手动操作。\n\n重启项目后更新检测即生效：",
-          {
-            copyBlocks: [{ text: "请帮我重启项目" }],
-            actions: [
-              { label: "完成，开始使用 🚀", value: "finish", primary: true },
             ],
           }
         );

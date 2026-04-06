@@ -401,13 +401,16 @@ function PageHome({
   );
 }
 
+type BackendStat = { calls: number; errors: number; promptTokens: number; completionTokens: number; totalTokens: number; avgDurationMs: number; avgTtftMs: number | null; health: string; url?: string; dynamic?: boolean; enabled?: boolean };
+
 function PageStats({
   baseUrl, apiKey, stats, statsError, onRefresh,
   addUrl, setAddUrl, addState, addMsg, onAddBackend, onRemoveBackend,
+  onToggleBackend, onBatchToggle, onBatchRemove,
 }: {
   baseUrl: string;
   apiKey: string;
-  stats: Record<string, { calls: number; errors: number; promptTokens: number; completionTokens: number; totalTokens: number; avgDurationMs: number; avgTtftMs: number | null; health: string; url?: string; dynamic?: boolean }> | null;
+  stats: Record<string, BackendStat> | null;
   statsError: boolean;
   onRefresh: () => void;
   addUrl: string;
@@ -416,8 +419,26 @@ function PageStats({
   addMsg: string;
   onAddBackend: (e: React.FormEvent) => void;
   onRemoveBackend: (label: string) => void;
+  onToggleBackend: (label: string, enabled: boolean) => void;
+  onBatchToggle: (labels: string[], enabled: boolean) => void;
+  onBatchRemove: (labels: string[]) => void;
 }) {
   const _ = baseUrl; // used by parent
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const dynamicNodes = stats
+    ? Object.entries(stats).filter(([, s]) => s.dynamic)
+    : [];
+
+  const allSelected = dynamicNodes.length > 0 && dynamicNodes.every(([l]) => selected.has(l));
+  const someSelected = selected.size > 0;
+
+  const toggleSelect = (label: string) =>
+    setSelected((prev) => { const s = new Set(prev); s.has(label) ? s.delete(label) : s.add(label); return s; });
+
+  const toggleSelectAll = () =>
+    setSelected(allSelected ? new Set() : new Set(dynamicNodes.map(([l]) => l)));
+
   return (
     <>
       {/* Stats */}
@@ -531,18 +552,103 @@ function PageStats({
             {addState === "ok" && <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#4ade80" }}>{addMsg}</p>}
             {addState === "err" && <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#f87171" }}>{addMsg}</p>}
 
-            {stats && Object.entries(stats).some(([, s]) => s.dynamic) && (
+            {dynamicNodes.length > 0 && (
               <div style={{ marginTop: "14px" }}>
-                <p style={{ margin: "0 0 8px", fontSize: "11px", color: "#334155" }}>动态节点（重新发布后清除）：</p>
+                {/* 标题行 + 全选 + 批量操作 */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+                  {/* 全选复选框 */}
+                  <label style={{ display: "flex", alignItems: "center", gap: "5px", cursor: "pointer", userSelect: "none" }}>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => { if (el) el.indeterminate = !allSelected && someSelected; }}
+                      onChange={toggleSelectAll}
+                      style={{ accentColor: "#818cf8", width: "14px", height: "14px", cursor: "pointer" }}
+                    />
+                    <span style={{ fontSize: "11px", color: "#475569" }}>
+                      {allSelected ? "取消全选" : "全选"}
+                      {someSelected && !allSelected ? `（已选 ${selected.size}）` : ""}
+                    </span>
+                  </label>
+
+                  {/* 批量操作按钮（有选中时显示） */}
+                  {someSelected && (
+                    <>
+                      <button
+                        onClick={() => { onBatchToggle([...selected], true); setSelected(new Set()); }}
+                        style={{ padding: "2px 10px", borderRadius: "5px", fontSize: "11px", border: "1px solid rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.08)", color: "#4ade80", cursor: "pointer" }}
+                      >启用选中</button>
+                      <button
+                        onClick={() => { onBatchToggle([...selected], false); setSelected(new Set()); }}
+                        style={{ padding: "2px 10px", borderRadius: "5px", fontSize: "11px", border: "1px solid rgba(251,191,36,0.3)", background: "rgba(251,191,36,0.08)", color: "#fbbf24", cursor: "pointer" }}
+                      >禁用选中</button>
+                      <button
+                        onClick={() => { onBatchRemove([...selected]); setSelected(new Set()); }}
+                        style={{ padding: "2px 10px", borderRadius: "5px", fontSize: "11px", border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)", color: "#f87171", cursor: "pointer" }}
+                      >移除选中</button>
+                    </>
+                  )}
+
+                  <span style={{ marginLeft: "auto", fontSize: "11px", color: "#334155" }}>动态节点（重新发布后清除）</span>
+                </div>
+
+                {/* 节点列表 */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                  {Object.entries(stats).filter(([, s]) => s.dynamic).map(([label, s]) => (
-                    <div key={label} style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(0,0,0,0.2)", borderRadius: "7px", padding: "8px 12px" }}>
-                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: s.health === "healthy" ? "#4ade80" : "#f87171" }} />
-                      <span style={{ flex: 1, fontSize: "12px", color: "#64748b", fontFamily: "Menlo, monospace", overflow: "hidden", textOverflow: "ellipsis" }}>{s.url ?? label}</span>
-                      <span style={{ fontSize: "11px", color: "#64748b" }}>{s.calls} 次</span>
-                      <button onClick={() => onRemoveBackend(label)} style={{ background: "none", border: "none", color: "#f87171", fontSize: "12px", cursor: "pointer", padding: "0 4px" }}>移除</button>
-                    </div>
-                  ))}
+                  {dynamicNodes.map(([label, s]) => {
+                    const isEnabled = s.enabled !== false;
+                    const isChecked = selected.has(label);
+                    return (
+                      <div
+                        key={label}
+                        onClick={() => toggleSelect(label)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "8px",
+                          background: isChecked ? "rgba(99,102,241,0.1)" : "rgba(0,0,0,0.2)",
+                          border: `1px solid ${isChecked ? "rgba(99,102,241,0.35)" : "rgba(255,255,255,0.05)"}`,
+                          borderRadius: "7px", padding: "8px 12px",
+                          cursor: "pointer", transition: "all 0.15s",
+                          opacity: isEnabled ? 1 : 0.5,
+                        }}
+                      >
+                        {/* 复选框 */}
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelect(label)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ accentColor: "#818cf8", width: "14px", height: "14px", cursor: "pointer", flexShrink: 0 }}
+                        />
+
+                        {/* 健康状态点 */}
+                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0,
+                          background: isEnabled ? (s.health === "healthy" ? "#4ade80" : "#f87171") : "#475569" }} />
+
+                        {/* URL */}
+                        <span style={{ flex: 1, fontSize: "12px", color: isEnabled ? "#94a3b8" : "#475569", fontFamily: "Menlo, monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {s.url ?? label}
+                        </span>
+
+                        {/* 禁用标签 */}
+                        {!isEnabled && (
+                          <span style={{ fontSize: "10px", color: "#64748b", background: "rgba(100,116,139,0.15)", border: "1px solid rgba(100,116,139,0.3)", borderRadius: "4px", padding: "1px 6px", flexShrink: 0 }}>已禁用</span>
+                        )}
+
+                        <span style={{ fontSize: "11px", color: "#475569", flexShrink: 0 }}>{s.calls} 次</span>
+
+                        {/* 单个操作按钮 */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onToggleBackend(label, !isEnabled); }}
+                          style={{ background: "none", border: `1px solid ${isEnabled ? "rgba(251,191,36,0.3)" : "rgba(74,222,128,0.3)"}`, borderRadius: "4px", color: isEnabled ? "#fbbf24" : "#4ade80", fontSize: "11px", cursor: "pointer", padding: "1px 7px", flexShrink: 0 }}
+                        >
+                          {isEnabled ? "禁用" : "启用"}
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRemoveBackend(label); }}
+                          style={{ background: "none", border: "none", color: "#f87171", fontSize: "13px", cursor: "pointer", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                        >×</button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1149,7 +1255,7 @@ export default function App() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     openai: false, anthropic: false, gemini: false, openrouter: false,
   });
-  const [stats, setStats] = useState<Record<string, { calls: number; errors: number; promptTokens: number; completionTokens: number; totalTokens: number; avgDurationMs: number; avgTtftMs: number | null; health: string; url?: string; dynamic?: boolean }> | null>(null);
+  const [stats, setStats] = useState<Record<string, { calls: number; errors: number; promptTokens: number; completionTokens: number; totalTokens: number; avgDurationMs: number; avgTtftMs: number | null; health: string; url?: string; dynamic?: boolean; enabled?: boolean }> | null>(null);
   const [statsError, setStatsError] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [addState, setAddState] = useState<"idle" | "loading" | "ok" | "err">("idle");
@@ -1224,6 +1330,34 @@ export default function App() {
       method: "DELETE",
       headers: { Authorization: `Bearer ${apiKey}` },
     });
+    fetchStats(apiKey);
+  };
+
+  const toggleBackend = async (label: string, enabled: boolean) => {
+    await fetch(`${baseUrl}/v1/admin/backends/${label}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    fetchStats(apiKey);
+  };
+
+  const batchToggleBackends = async (labels: string[], enabled: boolean) => {
+    await fetch(`${baseUrl}/v1/admin/backends`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ labels, enabled }),
+    });
+    fetchStats(apiKey);
+  };
+
+  const batchRemoveBackends = async (labels: string[]) => {
+    await Promise.all(labels.map((l) =>
+      fetch(`${baseUrl}/v1/admin/backends/${l}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      })
+    ));
     fetchStats(apiKey);
   };
 
@@ -1339,6 +1473,9 @@ export default function App() {
             addMsg={addMsg}
             onAddBackend={addBackend}
             onRemoveBackend={removeBackend}
+            onToggleBackend={toggleBackend}
+            onBatchToggle={batchToggleBackends}
+            onBatchRemove={batchRemoveBackends}
           />
         )}
         {tab === "endpoints" && (
