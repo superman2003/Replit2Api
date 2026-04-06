@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4α",
+  "version": "1.0.4β",
   "name": "AI Proxy Gateway",
   "releaseDate": "2026-04-06",
-  "releaseNotes": "v1.0.4α — 修复版本比较逻辑，正确识别 α/β/rc 等预发布后缀"
+  "releaseNotes": "v1.0.4β — 子节点 URL 自动补全 /api（仅路由层，Base URL 不变）；FleetManager 根地址保持原样；服务端 getFriendProxyConfigs 同步规范化"
 }

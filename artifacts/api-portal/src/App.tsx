@@ -549,6 +549,15 @@ function PageStats({
                 flexShrink: 0,
               }}>{addState === "loading" ? "添加中…" : "添加节点"}</button>
             </form>
+            {(() => {
+              const raw = addUrl.trim();
+              const normed = normalizeBackendUrl(raw);
+              return raw && normed !== raw.replace(/\/+$/, "") ? (
+                <p style={{ margin: "6px 0 0", fontSize: "11.5px", color: "#94a3b8" }}>
+                  将保存为：<code style={{ color: "#a78bfa", fontFamily: "Menlo, monospace" }}>{normed}</code>
+                </p>
+              ) : null;
+            })()}
             {addState === "ok" && <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#4ade80" }}>{addMsg}</p>}
             {addState === "err" && <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#f87171" }}>{addMsg}</p>}
 
@@ -841,6 +850,14 @@ function saveFleet(data: FleetInstance[]) {
 }
 function genId() { return Math.random().toString(36).slice(2, 9); }
 
+// 将用户输入的 URL 规范化为正确的后端端点
+// 正确格式: https://{project}.replit.app/api
+function normalizeBackendUrl(raw: string): string {
+  const url = raw.trim().replace(/\/+$/, "");
+  if (!url) return url;
+  return /\/api$/i.test(url) ? url : url + "/api";
+}
+
 function FleetManager() {
   const [instances, setInstances] = useState<FleetInstance[]>(() => loadFleet());
   const [addName, setAddName] = useState("");
@@ -1002,16 +1019,18 @@ function FleetManager() {
       <p style={{ margin: "0 0 14px", fontSize: "12.5px", color: "#475569" }}>管理多个部署实例 · 数据保存在本地浏览器</p>
 
       {/* Add form */}
-      <div style={{ display: "flex", gap: "6px", marginBottom: "14px", flexWrap: "wrap" }}>
-        <input style={{ ...inp, flex: "0 0 110px" }} placeholder="名称" value={addName} onChange={(e) => setAddName(e.target.value)} />
-        <input style={{ ...inp, flex: "2 1 180px" }} placeholder="https://your-proxy.replit.app" value={addUrl} onChange={(e) => setAddUrl(e.target.value)} />
-        <input type="password" style={{ ...inp, flex: "1 1 130px" }} placeholder="PROXY_API_KEY" value={addKey} onChange={(e) => setAddKey(e.target.value)} />
-        <button onClick={addInst} disabled={!addUrl || !addKey} style={{
-          background: "rgba(99,102,241,0.7)", border: "1px solid rgba(99,102,241,0.6)",
-          color: "#e0e7ff", borderRadius: "7px", padding: "7px 16px",
-          fontSize: "13px", fontWeight: 600, cursor: (!addUrl || !addKey) ? "not-allowed" : "pointer",
-          opacity: (!addUrl || !addKey) ? 0.5 : 1, flexShrink: 0,
-        }}>添加</button>
+      <div style={{ marginBottom: "14px" }}>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+          <input style={{ ...inp, flex: "0 0 110px" }} placeholder="名称" value={addName} onChange={(e) => setAddName(e.target.value)} />
+          <input style={{ ...inp, flex: "2 1 180px" }} placeholder="https://your-proxy.replit.app（根地址）" value={addUrl} onChange={(e) => setAddUrl(e.target.value)} />
+          <input type="password" style={{ ...inp, flex: "1 1 130px" }} placeholder="PROXY_API_KEY" value={addKey} onChange={(e) => setAddKey(e.target.value)} />
+          <button onClick={addInst} disabled={!addUrl || !addKey} style={{
+            background: "rgba(99,102,241,0.7)", border: "1px solid rgba(99,102,241,0.6)",
+            color: "#e0e7ff", borderRadius: "7px", padding: "7px 16px",
+            fontSize: "13px", fontWeight: 600, cursor: (!addUrl || !addKey) ? "not-allowed" : "pointer",
+            opacity: (!addUrl || !addKey) ? 0.5 : 1, flexShrink: 0,
+          }}>添加</button>
+        </div>
       </div>
 
       {/* Table */}
@@ -1308,7 +1327,7 @@ export default function App() {
 
   const addBackend = async (e: React.FormEvent) => {
     e.preventDefault();
-    const url = addUrl.trim().replace(/\/+$/, "");
+    const url = normalizeBackendUrl(addUrl);
     if (!url) return;
     setAddState("loading");
     try {

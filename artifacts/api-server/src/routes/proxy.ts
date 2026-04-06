@@ -96,6 +96,15 @@ function saveDynamicBackends(list: DynamicBackend[]): void {
 
 let dynamicBackends: DynamicBackend[] = loadDynamicBackends();
 
+// 子节点端点规范化：确保 URL 以 /api 结尾
+// 正确格式: https://{project}.replit.app/api
+// 本地 backend（OpenAI/Anthropic/Gemini）走各自独立路由，不经过此函数
+function normalizeSubNodeUrl(raw: string): string {
+  const url = raw.trim().replace(/\/+$/, "");
+  if (!url) return url;
+  return /\/api$/i.test(url) ? url : url + "/api";
+}
+
 function getFriendProxyConfigs(): { label: string; url: string; apiKey: string }[] {
   const apiKey = process.env.PROXY_API_KEY ?? "";
   const configs: { label: string; url: string; apiKey: string }[] = [];
@@ -103,14 +112,15 @@ function getFriendProxyConfigs(): { label: string; url: string; apiKey: string }
   // Auto-scan FRIEND_PROXY_URL, FRIEND_PROXY_URL_2 … FRIEND_PROXY_URL_20 from env
   const envKeys = ["FRIEND_PROXY_URL", ...Array.from({ length: 19 }, (_, i) => `FRIEND_PROXY_URL_${i + 2}`)];
   for (const key of envKeys) {
-    const url = process.env[key];
-    if (url) configs.push({ label: key.replace("FRIEND_PROXY_URL", "FRIEND"), url, apiKey });
+    const raw = process.env[key];
+    if (raw) configs.push({ label: key.replace("FRIEND_PROXY_URL", "FRIEND"), url: normalizeSubNodeUrl(raw), apiKey });
   }
 
   // Merge dynamic backends (added via API), skip duplicates and disabled ones
   const knownUrls = new Set(configs.map((c) => c.url));
   for (const d of dynamicBackends) {
-    if (!knownUrls.has(d.url) && d.enabled !== false) configs.push({ label: d.label, url: d.url, apiKey });
+    const url = normalizeSubNodeUrl(d.url);
+    if (!knownUrls.has(url) && d.enabled !== false) configs.push({ label: d.label, url, apiKey });
   }
 
   return configs;
