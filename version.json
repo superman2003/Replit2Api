@@ -1,6 +1,6 @@
 {
-  "version": "1.0.6",
+  "version": "1.0.7",
   "name": "AI Proxy Gateway",
   "releaseDate": "2026-04-06",
-  "releaseNotes": "v1.0.6 — Model management tab: group-level and per-model enable/disable switches; disabled models filtered from /v1/models and blocked at routing; state persisted to disk"
+  "releaseNotes": "v1.0.7 — Fix: update-check button now always clickable with loading feedback; stats show all backends including disabled ones"
 }

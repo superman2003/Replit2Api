@@ -257,6 +257,15 @@ function PageHome({
         </div>
         {[
           {
+            version: "v1.0.7",
+            date: "2026-04-06",
+            items: [
+              { zh: "修复「重新检测」按钮在错误状态下不可点击的问题；点击后显示 loading 旋转和完成提示", en: "Fix: 'Re-check' button is now always clickable even after an error; shows spinner and completion feedback" },
+              { zh: "修复「检测更新」弹窗按钮在 error 状态重置流程；新增无更新时「已是最新版本」提示", en: "Fix update modal error-state reset flow; show 'Already up to date' notice when no update is available" },
+              { zh: "统计页面：/v1/stats 现在包含全部后端节点（含禁用的），禁用节点以红色边框 + 「已禁用」标签区分", en: "Stats page: /v1/stats now includes all backends including disabled ones; disabled rows show red border + badge" },
+            ],
+          },
+          {
             version: "v1.0.6",
             date: "2026-04-06",
             items: [
@@ -794,7 +803,7 @@ function UpdateBar({ baseUrl, apiKey }: { baseUrl: string; apiKey: string }) {
           )}
         </div>
 
-        {!isDone && (
+        {!isDone && hasUpdate && (
           <button
             onClick={applyUpdate}
             disabled={isWorking}
@@ -810,9 +819,10 @@ function UpdateBar({ baseUrl, apiKey }: { baseUrl: string; apiKey: string }) {
           </button>
         )}
 
-        {!isWorking && !isDone && !isError && (
+        {/* 重新检测 — 始终显示（更新中除外），error 状态也可点 */}
+        {!isWorking && !isDone && (
           <button
-            onClick={check}
+            onClick={() => { setUbState("idle"); setMsg(""); check(); }}
             style={{
               padding: "5px 10px", borderRadius: "7px", fontSize: "12px",
               border: "1px solid rgba(251,191,36,0.25)",

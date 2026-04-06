@@ -23,6 +23,8 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
   const [open, setOpen] = useState(false);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateMsg, setUpdateMsg] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [checkDone, setCheckDone] = useState(false);
 
   const fetchVersion = useCallback(async () => {
     try {
@@ -30,6 +32,18 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
       if (r.ok) setInfo(await r.json());
     } catch {}
   }, [baseUrl]);
+
+  const manualCheck = async () => {
+    setChecking(true);
+    setCheckDone(false);
+    try {
+      const r = await fetch(`${baseUrl}/api/update/version`);
+      if (r.ok) setInfo(await r.json());
+    } catch {}
+    setChecking(false);
+    setCheckDone(true);
+    setTimeout(() => setCheckDone(false), 2000);
+  };
 
   useEffect(() => {
     fetchVersion();
@@ -39,7 +53,7 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
 
   const applyUpdate = async () => {
     if (!apiKey) {
-      setUpdateMsg("请先在下方输入 API Key 后再执行更新");
+      setUpdateMsg("请先在首页填写 API Key 后再执行更新");
       setUpdateState("error");
       return;
     }
@@ -133,6 +147,7 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
               </div>
             )}
 
+            {/* 检测失败提示 */}
             {info.checkError && !hasUpdate && (
               <div style={{
                 background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)",
@@ -140,6 +155,17 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
                 color: "#f87171", fontSize: "12.5px",
               }}>
                 版本检测失败：{info.checkError}
+              </div>
+            )}
+
+            {/* 无更新提示 */}
+            {!hasUpdate && !info.checkError && (
+              <div style={{
+                background: "rgba(74,222,128,0.06)", border: "1px solid rgba(74,222,128,0.15)",
+                borderRadius: "10px", padding: "10px 14px", marginBottom: "16px",
+                color: "#86efac", fontSize: "12.5px",
+              }}>
+                ✓ 已是最新版本
               </div>
             )}
 
@@ -163,7 +189,7 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
               </div>
             )}
 
-            {/* 更新状态消息 */}
+            {/* 更新操作状态消息 */}
             {updateState !== "idle" && (
               <div style={{
                 background: updateState === "error" ? "rgba(239,68,68,0.08)" : "rgba(74,222,128,0.06)",
@@ -181,18 +207,26 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
 
             {/* 底部按钮 */}
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              {/* 重新检测 — 始终可见，有 loading 反馈 */}
               <button
-                onClick={fetchVersion}
+                onClick={manualCheck}
+                disabled={checking || updateState === "applying"}
                 style={{
                   padding: "8px 16px", borderRadius: "8px",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "#475569", fontSize: "13px", cursor: "pointer",
+                  border: `1px solid ${checkDone ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"}`,
+                  background: checkDone ? "rgba(74,222,128,0.08)" : "rgba(255,255,255,0.04)",
+                  color: checkDone ? "#4ade80" : checking ? "#334155" : "#475569",
+                  fontSize: "13px", cursor: (checking || updateState === "applying") ? "not-allowed" : "pointer",
+                  display: "flex", alignItems: "center", gap: "6px",
+                  opacity: updateState === "applying" ? 0.5 : 1,
+                  transition: "all 0.2s",
                 }}
               >
-                重新检测
+                {checking && <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>}
+                {checking ? "检测中…" : checkDone ? "✓ 检测完成" : "重新检测"}
               </button>
 
+              {/* 立即更新 — 仅有新版本时显示 */}
               {hasUpdate && (
                 <button
                   onClick={applyUpdate}
@@ -207,6 +241,20 @@ export default function UpdateBadge({ baseUrl, apiKey }: Props) {
                   }}
                 >
                   {updateState === "applying" ? "更新中…" : updateState === "done" ? "已完成 ✓" : "立即更新"}
+                </button>
+              )}
+
+              {/* 重试 — 仅在更新失败时显示 */}
+              {updateState === "error" && (
+                <button
+                  onClick={() => { setUpdateState("idle"); setUpdateMsg(""); }}
+                  style={{
+                    padding: "8px 14px", borderRadius: "8px",
+                    border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.08)",
+                    color: "#f87171", fontSize: "13px", cursor: "pointer",
+                  }}
+                >
+                  重置
                 </button>
               )}
             </div>
