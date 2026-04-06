@@ -1,8 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { resolve, dirname } from "path";
+import { readJson, writeJson } from "../lib/cloudPersist";
 import { getSillyTavernMode } from "./settings";
 
 const router: IRouter = Router();
@@ -77,25 +76,22 @@ const HEALTH_TTL_MS = 30_000;   // reuse cached result for 30s
 const HEALTH_TIMEOUT_MS = 5_000; // 5s timeout per check
 
 // ---------------------------------------------------------------------------
-// Dynamic backends (file-persisted, survives restarts, reset on redeploy)
+// Dynamic backends (cloud-persisted via GCS in production, local file in dev)
 // ---------------------------------------------------------------------------
-
-const DYNAMIC_FILE = resolve(process.cwd(), "dynamic_backends.json");
 
 interface DynamicBackend { label: string; url: string; enabled?: boolean }
 
-function loadDynamicBackends(): DynamicBackend[] {
-  try {
-    if (existsSync(DYNAMIC_FILE)) return JSON.parse(readFileSync(DYNAMIC_FILE, "utf8"));
-  } catch {}
-  return [];
-}
+let dynamicBackends: DynamicBackend[] = [];
+
+// Async bootstrap — load persisted data from GCS (or local file) on startup
+(async () => {
+  const saved = await readJson<DynamicBackend[]>("dynamic_backends.json");
+  if (Array.isArray(saved)) dynamicBackends = saved;
+})();
 
 function saveDynamicBackends(list: DynamicBackend[]): void {
-  try { writeFileSync(DYNAMIC_FILE, JSON.stringify(list, null, 2)); } catch {}
+  writeJson("dynamic_backends.json", list).catch(() => {});
 }
-
-let dynamicBackends: DynamicBackend[] = loadDynamicBackends();
 
 // ---------------------------------------------------------------------------
 // Model provider map + enable/disable management
@@ -120,27 +116,17 @@ for (const base of GEMINI_BASE_MODELS) {
 }
 for (const id of OPENROUTER_FEATURED) { MODEL_PROVIDER_MAP.set(id, "openrouter"); }
 
-const DISABLED_MODELS_FILE = resolve(process.cwd(), "disabled_models.json");
+let disabledModels: Set<string> = new Set<string>();
 
-function loadDisabledModels(): Set<string> {
-  try {
-    if (existsSync(DISABLED_MODELS_FILE)) {
-      const list = JSON.parse(readFileSync(DISABLED_MODELS_FILE, "utf8"));
-      if (Array.isArray(list)) return new Set<string>(list);
-    }
-  } catch {}
-  return new Set<string>();
-}
+// Async bootstrap for disabled models
+(async () => {
+  const saved = await readJson<string[]>("disabled_models.json");
+  if (Array.isArray(saved)) disabledModels = new Set<string>(saved);
+})();
 
 function saveDisabledModels(set: Set<string>): void {
-  try {
-    const dir = dirname(DISABLED_MODELS_FILE);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(DISABLED_MODELS_FILE, JSON.stringify([...set], null, 2));
-  } catch {}
+  writeJson("disabled_models.json", [...set]).catch(() => {});
 }
-
-let disabledModels: Set<string> = loadDisabledModels();
 
 function isModelEnabled(id: string): boolean {
   return !disabledModels.has(id);
