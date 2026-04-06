@@ -1,10 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 
-const GITHUB_URL = "https://github.com/Akatsuki03/Replit2Api";
-
-const UPDATE_PROMPT = `请帮我将 AI Proxy Gateway 更新到最新版本：
-从 GitHub 仓库 ${GITHUB_URL} 拉取 main 分支的最新代码，运行 pnpm install，然后重启 "API Server" 工作流。`;
-
 interface VersionInfo {
   version: string;
   name?: string;
@@ -21,52 +16,13 @@ interface Props {
   apiKey: string;
 }
 
-function CopyBlock({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-  return (
-    <div style={{
-      background: "rgba(0,0,0,0.35)", border: "1px solid rgba(99,102,241,0.3)",
-      borderRadius: "8px", padding: "12px 14px", marginTop: "4px",
-    }}>
-      <pre style={{
-        margin: "0 0 10px 0", color: "#a5b4fc", fontSize: "12.5px",
-        fontFamily: "Menlo, monospace", lineHeight: "1.6",
-        whiteSpace: "pre-wrap", wordBreak: "break-word",
-      }}>{text}</pre>
-      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ fontSize: "11.5px", color: "#818cf8", textDecoration: "none" }}
-        >
-          📦 {GITHUB_URL}
-        </a>
-        <button
-          onClick={copy}
-          style={{
-            marginLeft: "auto", padding: "4px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 700,
-            border: `1px solid ${copied ? "rgba(74,222,128,0.4)" : "rgba(99,102,241,0.4)"}`,
-            background: copied ? "rgba(74,222,128,0.12)" : "rgba(99,102,241,0.15)",
-            color: copied ? "#4ade80" : "#818cf8", cursor: "pointer", transition: "all 0.2s",
-          }}
-        >
-          {copied ? "已复制 ✓" : "复制指令"}
-        </button>
-      </div>
-    </div>
-  );
-}
+type UpdateState = "idle" | "applying" | "done" | "error";
 
-export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
+export default function UpdateBadge({ baseUrl, apiKey }: Props) {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [open, setOpen] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateMsg, setUpdateMsg] = useState("");
 
   const fetchVersion = useCallback(async () => {
     try {
@@ -80,6 +36,34 @@ export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
     const t = setInterval(fetchVersion, 5 * 60 * 1000);
     return () => clearInterval(t);
   }, [fetchVersion]);
+
+  const applyUpdate = async () => {
+    if (!apiKey) {
+      setUpdateMsg("请先在下方输入 API Key 后再执行更新");
+      setUpdateState("error");
+      return;
+    }
+    setUpdateState("applying");
+    setUpdateMsg("正在从 GitHub 拉取最新代码，服务器即将自动重启（约 30-60 秒）…");
+    try {
+      const r = await fetch(`${baseUrl}/api/update/apply`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setUpdateState("error");
+        setUpdateMsg(d.error ?? "更新失败，请稍后重试");
+      } else {
+        setUpdateState("done");
+        setUpdateMsg("更新已启动 — 服务器正在重新编译并重启，约 30 秒后自动刷新页面…");
+        setTimeout(() => window.location.reload(), 35000);
+      }
+    } catch {
+      setUpdateState("error");
+      setUpdateMsg("网络错误，请重试");
+    }
+  };
 
   if (!info) return null;
 
@@ -121,7 +105,7 @@ export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
         >
           <div style={{
             background: "hsl(222,47%,12%)", border: "1px solid rgba(99,102,241,0.25)",
-            borderRadius: "16px", width: "100%", maxWidth: "500px",
+            borderRadius: "16px", width: "100%", maxWidth: "480px",
             padding: "24px", boxShadow: "0 32px 80px rgba(0,0,0,0.7)",
           }}>
             {/* 标题 */}
@@ -133,7 +117,7 @@ export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
                 </div>
               </div>
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => { setOpen(false); setUpdateState("idle"); setUpdateMsg(""); }}
                 style={{ background: "none", border: "none", color: "#334155", fontSize: "22px", cursor: "pointer" }}
               >×</button>
             </div>
@@ -159,7 +143,7 @@ export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
               </div>
             )}
 
-            {/* 新版本信息 + 更新指令 */}
+            {/* 新版本信息 */}
             {hasUpdate && (
               <div style={{
                 background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
@@ -172,21 +156,33 @@ export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
                   )}
                 </div>
                 {info.latestReleaseNotes && (
-                  <div style={{ color: "#94a3b8", fontSize: "12.5px", lineHeight: "1.6", marginBottom: "12px" }}>
+                  <div style={{ color: "#94a3b8", fontSize: "12.5px", lineHeight: "1.6" }}>
                     {info.latestReleaseNotes}
                   </div>
                 )}
-                <div style={{ color: "#64748b", fontSize: "11.5px", marginBottom: "8px" }}>
-                  将下方指令复制发给 Replit Agent，由 Agent 拉取最新代码并重启服务器：
-                </div>
-                <CopyBlock text={UPDATE_PROMPT} />
+              </div>
+            )}
+
+            {/* 更新状态消息 */}
+            {updateState !== "idle" && (
+              <div style={{
+                background: updateState === "error" ? "rgba(239,68,68,0.08)" : "rgba(74,222,128,0.06)",
+                border: `1px solid ${updateState === "error" ? "rgba(239,68,68,0.2)" : "rgba(74,222,128,0.15)"}`,
+                borderRadius: "10px", padding: "12px 14px", marginBottom: "14px",
+                color: updateState === "error" ? "#f87171" : "#86efac",
+                fontSize: "13px", lineHeight: "1.6",
+              }}>
+                {updateState === "applying" && (
+                  <span style={{ marginRight: "8px", animation: "spin 1s linear infinite", display: "inline-block" }}>⟳</span>
+                )}
+                {updateMsg}
               </div>
             )}
 
             {/* 底部按钮 */}
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => { fetchVersion(); }}
+                onClick={fetchVersion}
                 style={{
                   padding: "8px 16px", borderRadius: "8px",
                   border: "1px solid rgba(255,255,255,0.1)",
@@ -196,23 +192,32 @@ export default function UpdateBadge({ baseUrl, apiKey: _apiKey }: Props) {
               >
                 重新检测
               </button>
-              <button
-                onClick={() => setOpen(false)}
-                style={{
-                  padding: "8px 16px", borderRadius: "8px",
-                  border: "1px solid rgba(99,102,241,0.25)",
-                  background: "rgba(99,102,241,0.08)",
-                  color: "#818cf8", fontSize: "13px", cursor: "pointer",
-                }}
-              >
-                关闭
-              </button>
+
+              {hasUpdate && (
+                <button
+                  onClick={applyUpdate}
+                  disabled={updateState === "applying" || updateState === "done"}
+                  style={{
+                    padding: "8px 18px", borderRadius: "8px",
+                    border: "1px solid rgba(251,191,36,0.4)",
+                    background: updateState === "applying" ? "rgba(251,191,36,0.05)" : "rgba(251,191,36,0.12)",
+                    color: "#fbbf24", fontSize: "13px", fontWeight: 600,
+                    cursor: (updateState === "applying" || updateState === "done") ? "not-allowed" : "pointer",
+                    opacity: (updateState === "applying" || updateState === "done") ? 0.6 : 1,
+                  }}
+                >
+                  {updateState === "applying" ? "更新中…" : updateState === "done" ? "已完成 ✓" : "立即更新"}
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      <style>{`@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`}</style>
+      <style>{`
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+      `}</style>
     </>
   );
 }
