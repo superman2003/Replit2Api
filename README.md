@@ -17,6 +17,7 @@
 - [简介 · Overview](#简介--overview)
 - [功能特性 · Features](#功能特性--features)
 - [快速开始 · Quick Start](#快速开始--quick-start)
+- [环境变量 · Environment Variables](#环境变量--environment-variables)
 - [API 端点 · Endpoints](#api-端点--endpoints)
 - [认证方式 · Authentication](#认证方式--authentication)
 - [模型路由 · Model Routing](#模型路由--model-routing)
@@ -64,6 +65,8 @@ Deploy in one click via Replit **Remix**. All API keys are stored securely in Re
 
 ## 快速开始 · Quick Start
 
+### 方式一：Replit 一键部署（推荐）/ Option 1: Replit Remix (Recommended)
+
 **中文**
 
 1. 点击下方链接，进入 Replit 项目页面，点击右上角 **Remix** 按钮，将完整项目复制到你的账户：
@@ -83,6 +86,64 @@ Deploy in one click via Replit **Remix**. All API keys are stored securely in Re
 2. After Remix, click **Run** to start the project and wait for the server to come up.
 3. Open the portal page and follow the built-in **Setup Wizard** to complete initialization — no third-party API keys required.
 4. Click **Publish** to go live. Set the production domain (`https://your-app.replit.app`) as the **Base URL** in your client.
+
+### 方式二：从 GitHub 克隆 / Option 2: Clone from GitHub
+
+**中文**
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/superman2003/Replit2Api.git
+cd Replit2Api
+
+# 2. 安装依赖（需要 pnpm）
+pnpm install
+
+# 3. 构建项目
+pnpm run build
+
+# 4. 启动服务
+cd artifacts/api-server
+pnpm start
+```
+
+**English**
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/superman2003/Replit2Api.git
+cd Replit2Api
+
+# 2. Install dependencies (pnpm required)
+pnpm install
+
+# 3. Build the project
+pnpm run build
+
+# 4. Start the server
+cd artifacts/api-server
+pnpm start
+```
+
+---
+
+## 环境变量 · Environment Variables
+
+在 Replit 中通过 **Secrets** 配置，本地部署时创建 `.env` 文件：
+
+On Replit, configure via **Secrets**. For local deployment, create a `.env` file:
+
+| 变量名 / Variable | 必填 | 说明 / Description |
+|---|---|---|
+| `PROXY_API_KEY` | Yes | 代理网关的访问密钥 / Access key for the proxy gateway |
+| `OPENAI_API_KEY` | No | OpenAI API 密钥 / OpenAI API key |
+| `ANTHROPIC_API_KEY` | No | Anthropic Claude API 密钥 / Anthropic Claude API key |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | No | Google Gemini API 密钥 / Google Gemini API key |
+| `OPENROUTER_API_KEY` | No | OpenRouter API 密钥 / OpenRouter API key |
+
+> 至少配置一个服务商的 API Key 即可使用对应模型。
+>
+> Configure at least one provider's API key to use its models.
 
 ---
 

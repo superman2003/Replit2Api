@@ -340,6 +340,99 @@ function writeAndFlush(res: Response, data: string) {
   (res as unknown as { flush?: () => void }).flush?.();
 }
 
+const ANTHROPIC_NATIVE_TIMEOUT_MS = 60 * 60 * 1000;
+const ANTHROPIC_NATIVE_STRIP_FIELDS = new Set(["output_config"]);
+
+function sanitizeAnthropicNativeBody<T extends Record<string, unknown>>(body: T): {
+  body: T;
+  droppedFields: string[];
+  normalizedCacheControlCount: number;
+} {
+  const droppedFields: string[] = [];
+  let normalizedCacheControlCount = 0;
+
+  const normalizeCacheControl = (value: unknown): Record<string, unknown> | undefined => {
+    if (!value || typeof value !== "object") return undefined;
+
+    const record = value as Record<string, unknown>;
+    if (record.type === "ephemeral") {
+      const normalized: Record<string, unknown> = { type: "ephemeral" };
+      if (typeof record.ttl === "string") normalized.ttl = record.ttl;
+      if (Object.keys(record).some((key) => !["type", "ttl"].includes(key))) {
+        normalizedCacheControlCount++;
+      }
+      return normalized;
+    }
+
+    if (record.ephemeral && typeof record.ephemeral === "object") {
+      const normalized: Record<string, unknown> = { type: "ephemeral" };
+      const ephemeral = record.ephemeral as Record<string, unknown>;
+      if (typeof ephemeral.ttl === "string") normalized.ttl = ephemeral.ttl;
+      normalizedCacheControlCount++;
+      return normalized;
+    }
+
+    normalizedCacheControlCount++;
+    return undefined;
+  };
+
+  const sanitizeValue = (value: unknown, path: string[] = []): unknown => {
+    const key = path[path.length - 1];
+
+    if (key === "cache_control") {
+      return normalizeCacheControl(value);
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .map((item, index) => sanitizeValue(item, [...path, String(index)]))
+        .filter((item) => item !== undefined);
+    }
+
+    if (!value || typeof value !== "object") {
+      return value;
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [entryKey, entryValue] of Object.entries(value as Record<string, unknown>)) {
+      if (path.length === 0 && ANTHROPIC_NATIVE_STRIP_FIELDS.has(entryKey)) {
+        droppedFields.push(entryKey);
+        continue;
+      }
+
+      const sanitized = sanitizeValue(entryValue, [...path, entryKey]);
+      if (sanitized !== undefined) {
+        result[entryKey] = sanitized;
+      }
+    }
+    return result;
+  };
+
+  return {
+    body: sanitizeValue(body) as T,
+    droppedFields,
+    normalizedCacheControlCount,
+  };
+}
+
+function buildAnthropicNativeRequestOptions(
+  req: Request,
+  shouldStream: boolean,
+): Record<string, unknown> | undefined {
+  const headers: Record<string, string> = {};
+  const anthropicVersion = req.header("anthropic-version");
+  const anthropicBeta = req.header("anthropic-beta");
+
+  if (anthropicVersion) headers["anthropic-version"] = anthropicVersion;
+  if (anthropicBeta) headers["anthropic-beta"] = anthropicBeta;
+
+  const options: Record<string, unknown> = {};
+  if (!shouldStream) options.timeout = ANTHROPIC_NATIVE_TIMEOUT_MS;
+  if (Object.keys(headers).length > 0) options.headers = headers;
+
+  return Object.keys(options).length > 0 ? options : undefined;
+}
+
 function requireApiKey(req: Request, res: Response, next: () => void) {
   const proxyKey = process.env.PROXY_API_KEY;
   if (!proxyKey) {
@@ -633,7 +726,8 @@ router.post("/v1/chat/completions", requireApiKey, async (req: Request, res: Res
 // ---------------------------------------------------------------------------
 
 router.post("/v1/messages", requireApiKey, async (req: Request, res: Response) => {
-  const body = req.body as {
+  const sanitizedRequest = sanitizeAnthropicNativeBody(req.body as Record<string, unknown>);
+  const body = sanitizedRequest.body as {
     model?: string;
     messages: AnthropicMessage[];
     system?: string | { type: string; text: string }[];
@@ -649,6 +743,17 @@ router.post("/v1/messages", requireApiKey, async (req: Request, res: Response) =
   const maxTokens = max_tokens ?? 4096;
   const shouldStream = stream ?? false;
   const startTime = Date.now();
+  const requestOptions = buildAnthropicNativeRequestOptions(req, shouldStream);
+
+  if (sanitizedRequest.droppedFields.length > 0 || sanitizedRequest.normalizedCacheControlCount > 0) {
+    req.log.warn(
+      {
+        droppedFields: sanitizedRequest.droppedFields,
+        normalizedCacheControlCount: sanitizedRequest.normalizedCacheControlCount,
+      },
+      "Sanitized Anthropic-native request fields for compatibility",
+    );
+  }
 
   req.log.info({ model: selectedModel, stream: shouldStream }, "Anthropic /v1/messages request");
 
@@ -664,10 +769,7 @@ router.post("/v1/messages", requireApiKey, async (req: Request, res: Response) =
     } as Parameters<typeof client.messages.create>[0];
 
     if (shouldStream) {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no");
+      setSseHeaders(res);
 
       const keepalive = setInterval(() => {
         if (!res.writableEnded) writeAndFlush(res, ": keepalive\n\n");
@@ -676,26 +778,39 @@ router.post("/v1/messages", requireApiKey, async (req: Request, res: Response) =
 
       let inputTokens = 0;
       let outputTokens = 0;
+      let sawMessageStart = false;
+      let sawMessageStop = false;
 
       try {
-        const claudeStream = client.messages.stream(createParams as Parameters<typeof client.messages.stream>[0]);
+        const claudeStream = client.messages.stream(
+          createParams as Parameters<typeof client.messages.stream>[0],
+          requestOptions as Parameters<typeof client.messages.stream>[1],
+        );
 
         for await (const event of claudeStream) {
           if (event.type === "message_start") {
+            sawMessageStart = true;
             inputTokens = event.message.usage.input_tokens;
           } else if (event.type === "message_delta") {
             outputTokens = event.usage.output_tokens;
+          } else if (event.type === "message_stop") {
+            sawMessageStop = true;
           }
           writeAndFlush(res, `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
         }
-        writeAndFlush(res, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+        if (sawMessageStart && !sawMessageStop) {
+          writeAndFlush(res, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+        }
         res.end();
         recordCallStat("local", Date.now() - startTime, inputTokens, outputTokens);
       } finally {
         clearInterval(keepalive);
       }
     } else {
-      const result = await client.messages.create(createParams);
+      const result = await client.messages.create(
+        createParams,
+        requestOptions as Parameters<typeof client.messages.create>[1],
+      );
       const usage = (result as { usage?: { input_tokens?: number; output_tokens?: number } }).usage ?? {};
       recordCallStat("local", Date.now() - startTime, usage.input_tokens ?? 0, usage.output_tokens ?? 0);
       res.json(result);
