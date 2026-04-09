@@ -71,7 +71,7 @@ Deploy in one click via Replit **Remix**. All API keys are stored securely in Re
 
 1. 点击下方链接，进入 Replit 项目页面，点击右上角 **Remix** 按钮，将完整项目复制到你的账户：
 
-   👉 **[https://replit.com/@Akatsukis036s/Replit-Api-Public](https://replit.com/@Akatsukis036s/Replit-Api-Public)**
+   👉 **[https://replit.com/@AmyHarrison9637/Replit-Api-Wrapper-1](https://replit.com/@AmyHarrison9637/Replit-Api-Wrapper-1)**
 
 2. Remix 完成后，点击 **Run** 启动项目，等待服务器启动。
 3. 打开门户页面，按照内置的**配置助手**完成初始化（无需手动填写任何第三方 API Key）。
@@ -81,7 +81,7 @@ Deploy in one click via Replit **Remix**. All API keys are stored securely in Re
 
 1. Click the link below to open the Replit project, then click **Remix** in the top-right corner to copy it to your account:
 
-   👉 **[https://replit.com/@Akatsukis036s/Replit-Api-Public](https://replit.com/@Akatsukis036s/Replit-Api-Public)**
+   👉 **[https://replit.com/@AmyHarrison9637/Replit-Api-Wrapper-1](https://replit.com/@AmyHarrison9637/Replit-Api-Wrapper-1)**
 
 2. After Remix, click **Run** to start the project and wait for the server to come up.
 3. Open the portal page and follow the built-in **Setup Wizard** to complete initialization — no third-party API keys required.
